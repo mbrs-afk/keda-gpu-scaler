@@ -20,10 +20,13 @@ import (
 	"flag"
 	"fmt"
 	"net"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"google.golang.org/grpc"
@@ -31,14 +34,16 @@ import (
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/reflection"
 
-	"github.com/pmady/keda-gpu-scaler/pkg/gpu"
-	"github.com/pmady/keda-gpu-scaler/pkg/scaler"
 	pb "github.com/pmady/keda-gpu-scaler/pkg/externalscaler"
+	"github.com/pmady/keda-gpu-scaler/pkg/gpu"
+	"github.com/pmady/keda-gpu-scaler/pkg/metrics"
+	"github.com/pmady/keda-gpu-scaler/pkg/scaler"
 )
 
 var (
-	port     = flag.Int("port", 6000, "gRPC server port")
-	logLevel = flag.String("log-level", "info", "Log level (debug, info, warn, error)")
+	port        = flag.Int("port", 6000, "gRPC server port")
+	metricsPort = flag.Int("metrics-port", 9090, "Prometheus metrics HTTP port (0 to disable)")
+	logLevel    = flag.String("log-level", "info", "Log level (debug, info, warn, error)")
 )
 
 func main() {
@@ -49,6 +54,7 @@ func main() {
 
 	logger.Info("Starting keda-gpu-scaler",
 		zap.Int("port", *port),
+		zap.Int("metricsPort", *metricsPort),
 		zap.String("logLevel", *logLevel),
 	)
 
@@ -63,14 +69,36 @@ func main() {
 		}
 	}()
 
+	// Wrap collector with prometheus instrumentation if metrics are enabled
+	var metricsCollector gpu.MetricsCollector = collector
+	if *metricsPort > 0 {
+		metrics.Register(prometheus.DefaultRegisterer)
+		metricsCollector = metrics.Wrap(collector)
+
+		mux := http.NewServeMux()
+		mux.Handle("/metrics", promhttp.Handler())
+		mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		})
+		metricsAddr := fmt.Sprintf(":%d", *metricsPort)
+		go func() {
+			logger.Info("Prometheus metrics server listening", zap.String("address", metricsAddr))
+			if err := http.ListenAndServe(metricsAddr, mux); err != nil && err != http.ErrServerClosed {
+				logger.Fatal("Metrics server failed", zap.Error(err))
+			}
+		}()
+	} else {
+		logger.Info("Prometheus metrics disabled (metrics-port=0)")
+	}
+
 	// Log detected GPUs
-	count, err := collector.DeviceCount()
+	count, err := metricsCollector.DeviceCount()
 	if err != nil {
 		logger.Fatal("Failed to get GPU device count", zap.Error(err))
 	}
 	logger.Info("GPU devices detected", zap.Int("count", count))
 
-	allMetrics, err := collector.CollectAll()
+	allMetrics, err := metricsCollector.CollectAll()
 	if err != nil {
 		logger.Warn("Failed to collect initial GPU metrics", zap.Error(err))
 	} else {
@@ -95,7 +123,7 @@ func main() {
 	grpcServer := grpc.NewServer()
 
 	// Register GPU external scaler
-	gpuScaler := scaler.NewGPUExternalScaler(collector, logger)
+	gpuScaler := scaler.NewGPUExternalScaler(metricsCollector, logger)
 	pb.RegisterExternalScalerServer(grpcServer, gpuScaler)
 
 	// Register health check

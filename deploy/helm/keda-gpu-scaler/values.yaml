@@ -23,6 +23,11 @@ grpc:
 
 logLevel: info
 
+# Prometheus metrics endpoint. Set enabled: false to disable.
+metrics:
+  enabled: true
+  port: 9090
+
 nodeSelector:
   nvidia.com/gpu.present: "true"
 

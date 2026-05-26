@@ -25,6 +25,10 @@ spec:
       targetPort: grpc
       protocol: TCP
       name: grpc
+    - port: 9090
+      targetPort: metrics
+      protocol: TCP
+      name: metrics
   selector:
     app.kubernetes.io/name: keda-gpu-scaler
 
@@ -73,9 +77,13 @@ spec:
           args:
             - "--port=6000"
             - "--log-level=info"
+            - "--metrics-port=9090"
           ports:
             - name: grpc
               containerPort: 6000
+              protocol: TCP
+            - name: metrics
+              containerPort: 9090
               protocol: TCP
           # NVML requires root + access to the host's NVIDIA device files.
           securityContext:

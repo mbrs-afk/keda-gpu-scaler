@@ -35,10 +35,20 @@ spec:
           args:
             - --port={{ .Values.grpc.port }}
             - --log-level={{ .Values.logLevel }}
+            {{- if .Values.metrics.enabled }}
+            - --metrics-port={{ .Values.metrics.port }}
+            {{- else }}
+            - --metrics-port=0
+            {{- end }}
           ports:
             - name: grpc
               containerPort: {{ .Values.grpc.port }}
               protocol: TCP
+            {{- if .Values.metrics.enabled }}
+            - name: metrics
+              containerPort: {{ .Values.metrics.port }}
+              protocol: TCP
+            {{- end }}
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}
           livenessProbe:
