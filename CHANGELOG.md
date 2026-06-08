@@ -8,6 +8,30 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- HTTP health probes (`--probe-port=8081`) with `/healthz` and `/readyz` endpoints
+- PCIe bandwidth metrics: `pcie_tx_kbps`, `pcie_rx_kbps` for CPU↔GPU throughput monitoring
+- NVLink bandwidth metrics: `nvlink_tx_mbps`, `nvlink_rx_mbps` for GPU↔GPU communication monitoring
+- `distributed-training` scaling profile optimized for NVLink systems
+- Comprehensive documentation for advanced GPU metrics with hardware-specific guidance
+- Updated Prometheus metrics with PCIe/NVLink throughput gauges and device count
+- Support for 10 total metric types including temperature, power draw, and memory metrics
+- Graceful handling of non-NVLink hardware (metrics return 0 with debug logging)
+
+### Changed
+
+- Updated metricType parameter documentation with complete supported values table
+- Enhanced scaling profiles table from 4 to 5 profiles
+- Improved test coverage with dedicated PCIe/NVLink test functions
+
+### Contributors
+
+- [@ibobgunardi](https://github.com/ibobgunardi) - HTTP health probes implementation
+- [@venkata22a](https://github.com/venkata22a) - PCIe/NVLink bandwidth metrics and comprehensive documentation
+
+## [v0.3.0] - 2026-05-29
+
+### Added
+
 - Optional Prometheus metrics endpoint (`--metrics-port=9090`, set to 0 to disable)
 - Per-GPU Prometheus gauges: utilization, memory, temperature, power draw
 - Scaler operational metrics: collection counters, duration histogram, gRPC request counters
