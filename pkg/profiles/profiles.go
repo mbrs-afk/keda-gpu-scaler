@@ -39,11 +39,10 @@ const (
 	MetricMemoryUsedPercent MetricType = "memory_used_percent"
 	MetricTemperature       MetricType = "temperature"
 	MetricPowerDraw         MetricType = "power_draw"
-	// PCIe throughput — useful for CPU↔GPU data transfer bottlenecks.
+	// PCIe throughput metrics
 	MetricPCIeTxKBps MetricType = "pcie_tx_kbps"
 	MetricPCIeRxKBps MetricType = "pcie_rx_kbps"
-	// NVLink throughput — useful for GPU↔GPU communication bottlenecks
-	// in data-parallel training on NVSwitch/DGX systems.
+	// NVLink throughput metrics
 	MetricNVLinkTxMBps MetricType = "nvlink_tx_mbps"
 	MetricNVLinkRxMBps MetricType = "nvlink_rx_mbps"
 )
@@ -53,8 +52,8 @@ var builtinProfiles = map[string]Profile{
 	"distributed-training": {
 		Name:               "distributed-training",
 		MetricName:         "keda_gpu_distributed_training",
-		Description:        "Data-parallel training on NVLink systems — scale on inter-GPU communication bandwidth",
-		TargetValue:        800, // MB/s — tune per hardware (A100 NVLink peak ~600 GB/s aggregate)
+		Description:        "Data-parallel training on NVLink systems",
+		TargetValue:        800,
 		ActivationValue:    100,
 		MetricType:         MetricNVLinkTxMBps,
 		CooldownSeconds:    300,

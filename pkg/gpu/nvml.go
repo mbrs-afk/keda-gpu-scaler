@@ -39,10 +39,10 @@ type Metrics struct {
 	TemperatureCelsius uint32
 	PowerDrawWatts     uint32
 	PowerLimitWatts    uint32
-	// PCIe throughput — sampled by NVML over a ~20ms window.
+	// PCIe throughput
 	PCIeTxKBps uint32
 	PCIeRxKBps uint32
-	// NVLink throughput — aggregate across all active links on this device.
+	// NVLink throughput
 	NVLinkTxMBps uint64
 	NVLinkRxMBps uint64
 }
@@ -160,7 +160,7 @@ func (c *Collector) collectDevice(index int) (Metrics, error) {
 		m.PowerLimitWatts = powerLimit / 1000
 	}
 
-	// PCIe throughput — KB/s over the last ~20ms NVML sampling window.
+	// PCIe throughput
 	if tx, ret := device.GetPcieThroughput(nvml.PCIE_UTIL_TX_BYTES); ret == nvml.SUCCESS {
 		m.PCIeTxKBps = tx
 	}
@@ -168,11 +168,7 @@ func (c *Collector) collectDevice(index int) (Metrics, error) {
 		m.PCIeRxKBps = rx
 	}
 
-	// NVLink throughput — iterate all possible links and aggregate active ones.
-	// On hardware without NVLink (e.g. T4, A10), every link returns an error
-	// and is skipped, leaving NVLinkTxMBps/NVLinkRxMBps as 0.
-	// A warning is logged so operators know NVLink is unavailable rather than
-	// silently getting 0s that could trigger unexpected scale-to-zero.
+	// NVLink throughput
 	var nvlinkTxKBps, nvlinkRxKBps uint64
 	activeLinks := 0
 	for link := 0; link < maxNVLinks; link++ {
@@ -185,10 +181,7 @@ func (c *Collector) collectDevice(index int) (Metrics, error) {
 		activeLinks++
 	}
 	if activeLinks == 0 {
-		c.logger.Debug("no NVLink connections found on device — NVLink metrics will be 0 (normal for non-NVLink hardware like T4/A10)",
-			zap.Int("gpuIndex", index),
-			zap.String("gpu", m.Name),
-		)
+		c.logger.Debug("no NVLink found", zap.Int("gpuIndex", index))
 	}
 	m.NVLinkTxMBps = nvlinkTxKBps / 1024
 	m.NVLinkRxMBps = nvlinkRxKBps / 1024
