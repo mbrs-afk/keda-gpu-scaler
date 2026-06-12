@@ -42,7 +42,8 @@ The binary requires NVIDIA GPU drivers (`libnvidia-ml.so`) to run. For local dev
 Releases are fully automated via GitHub Actions. To publish a new release:
 
 1. Ensure all changes are merged to `main`.
-2. Push a version tag:
+2. Push a semver version tag (`vX.Y.Z` — the release workflow triggers on `v*`, so
+   make sure the tag is valid semver to avoid a broken release):
    ```bash
    git tag v0.5.0
    git push origin v0.5.0

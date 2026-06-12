@@ -83,6 +83,11 @@ jobs:
           build amd64 gcc
           build arm64 aarch64-linux-gnu-gcc
 
+      - name: Generate checksums
+        run: |
+          sha256sum keda-gpu-scaler_*_linux_*.tar.gz > checksums.txt
+          cat checksums.txt
+
       - name: Create GitHub Release with changelog and binaries
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -90,4 +95,5 @@ jobs:
           gh release create "${GITHUB_REF_NAME}" \
             --title "${GITHUB_REF_NAME}" \
             --generate-notes \
-            keda-gpu-scaler_*_linux_*.tar.gz
+            keda-gpu-scaler_*_linux_*.tar.gz \
+            checksums.txt
