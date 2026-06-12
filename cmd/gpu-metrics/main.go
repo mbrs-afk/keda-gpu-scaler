@@ -28,14 +28,16 @@ import (
 	"time"
 
 	"github.com/pmady/keda-gpu-scaler/pkg/gpu"
+	"github.com/pmady/keda-gpu-scaler/pkg/slurm"
 	"go.uber.org/zap"
 )
 
 var (
-	format   = flag.String("format", "table", "Output format: table, json, csv")
-	interval = flag.Duration("interval", 0, "Collection interval (0 = one-shot)")
-	device   = flag.Int("device", -1, "GPU device index (-1 = all)")
-	quiet    = flag.Bool("quiet", false, "Suppress log output")
+	format    = flag.String("format", "table", "Output format: table, json, csv")
+	interval  = flag.Duration("interval", 0, "Collection interval (0 = one-shot)")
+	device    = flag.Int("device", -1, "GPU device index (-1 = all)")
+	quiet     = flag.Bool("quiet", false, "Suppress log output")
+	slurmMode = flag.String("slurm", "auto", "SLURM mode: auto, on, off")
 )
 
 func main() {
@@ -55,14 +57,27 @@ func main() {
 	}
 	defer func() { _ = collector.Close() }()
 
+	// detect SLURM
+	var slurmCtx *slurm.JobContext
+	if useSLURM(*slurmMode) {
+		ctx := slurm.FromEnv()
+		slurmCtx = &ctx
+		if !*quiet {
+			logger.Info("SLURM job detected",
+				zap.String("job_id", ctx.JobID),
+				zap.String("node", ctx.NodeName),
+				zap.String("gpus", ctx.GPUs))
+		}
+	}
+
 	// one-shot
 	if *interval <= 0 {
-		metrics, err := collect(collector)
+		metrics, err := collect(collector, slurmCtx)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "collection failed: %v\n", err)
 			os.Exit(1)
 		}
-		output(metrics, *format)
+		output(metrics, *format, slurmCtx)
 		return
 	}
 
@@ -74,11 +89,11 @@ func main() {
 	defer ticker.Stop()
 
 	for {
-		metrics, err := collect(collector)
+		metrics, err := collect(collector, slurmCtx)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "collection failed: %v\n", err)
 		} else {
-			output(metrics, *format)
+			output(metrics, *format, slurmCtx)
 		}
 
 		select {
@@ -89,7 +104,18 @@ func main() {
 	}
 }
 
-func collect(c gpu.MetricsCollector) ([]gpu.Metrics, error) {
+func useSLURM(mode string) bool {
+	switch mode {
+	case "on":
+		return true
+	case "off":
+		return false
+	default: // auto
+		return slurm.Detect()
+	}
+}
+
+func collect(c gpu.MetricsCollector, sctx *slurm.JobContext) ([]gpu.Metrics, error) {
 	if *device >= 0 {
 		m, err := c.CollectDevice(*device)
 		if err != nil {
@@ -97,36 +123,70 @@ func collect(c gpu.MetricsCollector) ([]gpu.Metrics, error) {
 		}
 		return []gpu.Metrics{m}, nil
 	}
+
+	// if inside SLURM, only collect assigned GPUs
+	if sctx != nil {
+		devs := sctx.VisibleDevices()
+		if len(devs) > 0 {
+			var out []gpu.Metrics
+			for _, idx := range devs {
+				m, err := c.CollectDevice(idx)
+				if err != nil {
+					return nil, fmt.Errorf("gpu %d: %w", idx, err)
+				}
+				out = append(out, m)
+			}
+			return out, nil
+		}
+	}
+
 	return c.CollectAll()
 }
 
-func output(metrics []gpu.Metrics, format string) {
+func output(metrics []gpu.Metrics, format string, sctx *slurm.JobContext) {
 	switch format {
 	case "json":
-		outputJSON(metrics)
+		outputJSON(metrics, sctx)
 	case "csv":
-		outputCSV(metrics)
+		outputCSV(metrics, sctx)
 	default:
-		outputTable(metrics)
+		outputTable(metrics, sctx)
 	}
 }
 
-func outputJSON(metrics []gpu.Metrics) {
-	enc := json.NewEncoder(os.Stdout)
-	enc.SetIndent("", "  ")
-	_ = enc.Encode(metrics)
+type jsonOutput struct {
+	SLURM   *slurm.JobContext `json:"slurm,omitempty"`
+	Devices []gpu.Metrics     `json:"devices"`
 }
 
-func outputCSV(metrics []gpu.Metrics) {
+func outputJSON(metrics []gpu.Metrics, sctx *slurm.JobContext) {
+	enc := json.NewEncoder(os.Stdout)
+	enc.SetIndent("", "  ")
+	_ = enc.Encode(jsonOutput{SLURM: sctx, Devices: metrics})
+}
+
+func outputCSV(metrics []gpu.Metrics, sctx *slurm.JobContext) {
 	w := csv.NewWriter(os.Stdout)
-	_ = w.Write(csvHeader())
+	hdr := csvHeader()
+	if sctx != nil {
+		hdr = append(sctx.Header(), hdr...)
+	}
+	_ = w.Write(hdr)
 	for _, m := range metrics {
-		_ = w.Write(csvRow(m))
+		row := csvRow(m)
+		if sctx != nil {
+			row = append(sctx.Row(), row...)
+		}
+		_ = w.Write(row)
 	}
 	w.Flush()
 }
 
-func outputTable(metrics []gpu.Metrics) {
+func outputTable(metrics []gpu.Metrics, sctx *slurm.JobContext) {
+	if sctx != nil {
+		fmt.Printf("SLURM Job %s (%s) — node %s, rank %d, gpus [%s]\n\n",
+			sctx.JobID, sctx.JobName, sctx.NodeName, sctx.ProcID, sctx.GPUs)
+	}
 	fmt.Printf("%-5s %-20s %6s %6s %10s %10s %6s %6s %10s %10s %10s %10s\n",
 		"GPU", "Name", "Util%", "Mem%", "MemUsed", "MemTotal", "Temp", "Power",
 		"PCIeTx", "PCIeRx", "NVLTx", "NVLRx")
