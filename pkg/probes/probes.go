@@ -36,7 +36,6 @@ func (s *State) Ready() bool {
 	return s.ready.Load()
 }
 
-// Handler returns an HTTP handler for Kubernetes liveness/readiness probes.
 func Handler(state *State) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {

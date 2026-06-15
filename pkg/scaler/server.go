@@ -44,7 +44,6 @@ func NewGPUExternalScaler(collector gpu.MetricsCollector, logger *zap.Logger) *G
 	}
 }
 
-// IsActive returns true if there is GPU activity above the activation threshold.
 func (s *GPUExternalScaler) IsActive(ctx context.Context, ref *pb.ScaledObjectRef) (*pb.IsActiveResponse, error) {
 	cfg, err := parseMetadata(ref.ScalerMetadata)
 	if err != nil {
@@ -57,17 +56,9 @@ func (s *GPUExternalScaler) IsActive(ctx context.Context, ref *pb.ScaledObjectRe
 	}
 
 	active := value > cfg.activationThreshold
-	s.logger.Debug("IsActive check",
-		zap.String("scaledObject", ref.Name),
-		zap.Float64("value", value),
-		zap.Float64("activationThreshold", cfg.activationThreshold),
-		zap.Bool("active", active),
-	)
-
 	return &pb.IsActiveResponse{Result: active}, nil
 }
 
-// StreamIsActive streams active status updates at regular intervals.
 func (s *GPUExternalScaler) StreamIsActive(ref *pb.ScaledObjectRef, stream pb.ExternalScaler_StreamIsActiveServer) error {
 	cfg, err := parseMetadata(ref.ScalerMetadata)
 	if err != nil {
@@ -96,7 +87,6 @@ func (s *GPUExternalScaler) StreamIsActive(ref *pb.ScaledObjectRef, stream pb.Ex
 	}
 }
 
-// GetMetricSpec returns the metric specification for HPA construction.
 func (s *GPUExternalScaler) GetMetricSpec(ctx context.Context, ref *pb.ScaledObjectRef) (*pb.GetMetricSpecResponse, error) {
 	cfg, err := parseMetadata(ref.ScalerMetadata)
 	if err != nil {
@@ -113,7 +103,6 @@ func (s *GPUExternalScaler) GetMetricSpec(ctx context.Context, ref *pb.ScaledObj
 	}, nil
 }
 
-// GetMetrics returns the current GPU metric values.
 func (s *GPUExternalScaler) GetMetrics(ctx context.Context, req *pb.GetMetricsRequest) (*pb.GetMetricsResponse, error) {
 	cfg, err := parseMetadata(req.ScaledObjectRef.ScalerMetadata)
 	if err != nil {
@@ -125,12 +114,6 @@ func (s *GPUExternalScaler) GetMetrics(ctx context.Context, req *pb.GetMetricsRe
 		return nil, fmt.Errorf("failed to get metric value: %w", err)
 	}
 
-	s.logger.Debug("GetMetrics",
-		zap.String("scaledObject", req.ScaledObjectRef.Name),
-		zap.String("metricName", cfg.metricName),
-		zap.Float64("value", value),
-	)
-
 	return &pb.GetMetricsResponse{
 		MetricValues: []*pb.MetricValue{
 			{
@@ -141,7 +124,6 @@ func (s *GPUExternalScaler) GetMetrics(ctx context.Context, req *pb.GetMetricsRe
 	}, nil
 }
 
-// scalerConfig holds parsed configuration from ScaledObject metadata.
 type scalerConfig struct {
 	metricName          string
 	metricType          profiles.MetricType
@@ -163,7 +145,6 @@ func parseMetadata(metadata map[string]string) (scalerConfig, error) {
 		pollIntervalSeconds: 10,
 	}
 
-	// Check for a pre-built profile first
 	if profileName, ok := metadata["profile"]; ok {
 		profile, found := profiles.Get(profileName)
 		if !found {
@@ -175,7 +156,6 @@ func parseMetadata(metadata map[string]string) (scalerConfig, error) {
 		cfg.activationThreshold = profile.ActivationValue
 	}
 
-	// Individual overrides take precedence over profile defaults
 	if v, ok := metadata["metricName"]; ok {
 		cfg.metricName = v
 	}
@@ -238,9 +218,7 @@ func parseMetadata(metadata map[string]string) (scalerConfig, error) {
 	return cfg, nil
 }
 
-// getMetricValue reads the current GPU metric based on the scaler configuration.
 func (s *GPUExternalScaler) getMetricValue(cfg scalerConfig) (float64, error) {
-	// Single GPU mode
 	if cfg.gpuIndex >= 0 {
 		m, err := s.collector.CollectDevice(cfg.gpuIndex)
 		if err != nil {
@@ -249,7 +227,6 @@ func (s *GPUExternalScaler) getMetricValue(cfg scalerConfig) (float64, error) {
 		return extractMetric(m, cfg.metricType), nil
 	}
 
-	// Aggregate across all GPUs
 	allMetrics, err := s.collector.CollectAll()
 	if err != nil {
 		return 0, err

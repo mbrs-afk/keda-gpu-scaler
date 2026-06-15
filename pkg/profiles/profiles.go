@@ -39,10 +39,8 @@ const (
 	MetricMemoryUsedPercent MetricType = "memory_used_percent"
 	MetricTemperature       MetricType = "temperature"
 	MetricPowerDraw         MetricType = "power_draw"
-	// PCIe throughput metrics
-	MetricPCIeTxKBps MetricType = "pcie_tx_kbps"
-	MetricPCIeRxKBps MetricType = "pcie_rx_kbps"
-	// NVLink throughput metrics
+	MetricPCIeTxKBps   MetricType = "pcie_tx_kbps"
+	MetricPCIeRxKBps   MetricType = "pcie_rx_kbps"
 	MetricNVLinkTxMBps MetricType = "nvlink_tx_mbps"
 	MetricNVLinkRxMBps MetricType = "nvlink_rx_mbps"
 )
