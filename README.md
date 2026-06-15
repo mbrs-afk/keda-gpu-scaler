@@ -4,44 +4,21 @@
 
 [![CI](https://github.com/pmady/keda-gpu-scaler/actions/workflows/ci.yaml/badge.svg)](https://github.com/pmady/keda-gpu-scaler/actions/workflows/ci.yaml)
 [![Go Report Card](https://goreportcard.com/badge/github.com/pmady/keda-gpu-scaler)](https://goreportcard.com/report/github.com/pmady/keda-gpu-scaler)
-[![GitHub Stars](https://img.shields.io/github/stars/pmady/keda-gpu-scaler?style=for-the-badge&logo=github)](https://github.com/pmady/keda-gpu-scaler/stargazers)
-[![GitHub Forks](https://img.shields.io/github/forks/pmady/keda-gpu-scaler?style=for-the-badge&logo=github)](https://github.com/pmady/keda-gpu-scaler/network/members)
-[![Contributors](https://img.shields.io/github/contributors/pmady/keda-gpu-scaler?style=for-the-badge&logo=github)](https://github.com/pmady/keda-gpu-scaler/graphs/contributors)
-[![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
-[![OpenSSF Best Practices](https://www.bestpractices.dev/projects/12912/badge)](https://www.bestpractices.dev/en/projects/12912)
-[![Documentation](https://readthedocs.org/projects/keda-gpu-scaler/badge/?version=latest)](https://keda-gpu-scaler.readthedocs.io/en/latest/)
-![KEDA: v2.10+](https://img.shields.io/badge/KEDA-v2.10%2B-orange)
-![Kubernetes: v1.24+](https://img.shields.io/badge/Kubernetes-v1.24%2B-blue)
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 
 A [KEDA External Scaler](https://keda.sh/docs/latest/concepts/external-scalers/) that reads NVIDIA GPU metrics directly from NVML C-bindings and autoscales your vLLM, Triton, and custom inference deployments — including scale-to-zero.
 
-### What it does in 30 seconds
-
-<p align="center">
-  <img src="docs/images/overview.png" alt="keda-gpu-scaler overview" width="100%"/>
-</p>
-
----
-
 ## Why This Exists
 
-Scaling AI inference on Kubernetes using CPU/Memory HPA is broken. Your GPU nodes sit at 10% CPU while the GPUs are 100% saturated with 200+ pending requests in the vLLM queue.
+Kubernetes HPA watches CPU and memory. It can't see GPU utilization. Your vLLM pod shows 8% CPU while the GPU is at 100%.
 
-The standard workaround — dcgm-exporter + Prometheus + KEDA Prometheus scaler — works but adds significant operational overhead:
+The usual fix is dcgm-exporter → Prometheus → KEDA, but that's 5 components and 15-30s of latency.
 
-```
-BEFORE: GPU Pod → dcgm-exporter → Prometheus → PromQL → KEDA → HPA
-        (5 components, 15-30s scrape delay, PromQL queries break on upgrades)
-
-AFTER:  GPU Pod → keda-gpu-scaler (NVML) → KEDA → HPA
-        (2 components, sub-second metrics, zero configuration)
-```
-
-**keda-gpu-scaler eliminates the entire metrics pipeline** — it reads GPU state directly from the hardware on each node and serves it to KEDA over gRPC.
+This project reads GPU metrics directly from NVML and serves them to KEDA over gRPC. 2 components, 2-4 second latency.
 
 ### Why Not a Native KEDA Scaler?
 
-Embedding GPU support directly inside KEDA core is architecturally impossible for three reasons:
+Putting GPU support inside KEDA core doesn't work:
 
 1. **CGO Constraint**: NVIDIA's Go bindings ([`go-nvml`](https://github.com/NVIDIA/go-nvml)) require `CGO_ENABLED=1`. KEDA builds with `CGO_ENABLED=0`.
 2. **Node-Level Hardware Access**: The KEDA operator runs as a central pod. NVML requires local GPU device access via `libnvidia-ml.so`, which only a **DaemonSet on GPU nodes** can provide.
@@ -344,11 +321,11 @@ docker push your-registry/keda-gpu-scaler:v0.1.0
 
 ---
 
-## Featured In
+## Related
 
-- **[GPU Autoscaling on Kubernetes with KEDA — Building an External Scaler](https://www.cncf.io/blog/2026/05/27/gpu-autoscaling-on-kubernetes-with-keda-building-an-external-scaler/)** — CNCF Blog (May 2026)
-- **[Abstracting AI Infrastructure: Native GPU Scaling for Internal Developer Platforms](https://platformengineering.com/contributed-content/abstracting-ai-infrastructure-native-gpu-scaling-for-internal-developer-platforms/)** — Platform Engineering (May 2026)
-- **[The Financial Trap of Autonomous Networks: Scaling Agentic AI in the Telecom Core](https://techblog.comsoc.org/2026/03/30/the-financial-trap-of-autonomous-networks-scaling-agentic-ai-in-the-telecom-core/)** — IEEE ComSoc Technology Blog (March 2026)
+- [CNCF Blog: GPU Autoscaling on Kubernetes with KEDA](https://www.cncf.io/blog/2026/05/27/gpu-autoscaling-on-kubernetes-with-keda-building-an-external-scaler/)
+- [KEDA issue #7538](https://github.com/kedacore/keda/issues/7538) — original discussion
+- [CNCF TOC initiative #2188](https://github.com/cncf/toc/issues/2188) — whitepaper proposal
 
 ---
 
@@ -360,26 +337,9 @@ Using keda-gpu-scaler? Add your organization to [ADOPTERS.md](ADOPTERS.md).
 
 ## Roadmap
 
-### Completed (v0.4.0)
-
-- [x] PCIe bandwidth and NVLink utilization metrics
-- [x] HTTP health probes (`/healthz`, `/readyz`)
-- [x] Standalone `gpu-metrics` CLI for non-Kubernetes environments
-
-### In Progress (v0.5.0)
-
-- [x] SLURM workload manager integration ([#52](https://github.com/pmady/keda-gpu-scaler/issues/52))
-- [x] Flux workload manager integration ([#53](https://github.com/pmady/keda-gpu-scaler/issues/53))
-- [ ] Cross-environment GPU metrics parity — K8s, SLURM, Flux ([#54](https://github.com/pmady/keda-gpu-scaler/issues/54))
-- [ ] NVIDIA collaboration for cross-platform metrics
-
-### Future
-
-- [ ] AMD ROCm support via `rocm-smi` bindings
-- [ ] Multi-Instance GPU (MIG) per-instance metrics
-- [ ] Inference-framework-aware scaling (vLLM queue depth via engine API)
-- [ ] Grafana dashboard for GPU fleet visibility
-- [ ] Singularity/Podman container support for HPC
+- AMD ROCm support
+- MIG per-instance metrics
+- vLLM queue depth scaling
 
 ---
 
