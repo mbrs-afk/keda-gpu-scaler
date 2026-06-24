@@ -21,3 +21,15 @@
 - [ ] `make test` passes
 - [ ] `make lint` passes
 - [ ] Commits are signed off (`git commit -s`)
+
+## Contributor Info
+
+<!-- We recognize all contributors in CONTRIBUTORS.md and on the project page.
+     Please fill in what you're comfortable sharing so we can properly credit you. -->
+
+- **Name:**
+- **Location:** <!-- optional -->
+- **Company / Affiliation:** <!-- optional -->
+
+<!-- First-time contributor? A ⭐ on the repo helps other contributors discover the project! -->
+- [ ] I have starred the [keda-gpu-scaler](https://github.com/pmady/keda-gpu-scaler) repository
